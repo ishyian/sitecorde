@@ -1,8 +1,6 @@
-
-import firebase from 'firebase/compat/app';
-import 'firebase/compat/auth';
-import 'firebase/compat/firestore';
-import 'firebase/compat/analytics';
+import { getApp, getApps, initializeApp } from "firebase/app";
+import { getAuth } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAwwIHdCaQC-j5UY_iWtifvMyDV18vS4-w",
@@ -15,53 +13,8 @@ const firebaseConfig = {
 };
 
 // Initialize once (important in dev with HMR)
-const app = !firebase.apps.length ? firebase.initializeApp(firebaseConfig) : firebase.app();
+const app = getApps().length ? initializeApp(firebaseConfig) : getApp();
 
 // Core services
-export const db = firebase.firestore();
-
-// A memoized promise to ensure auth is initialized only once.
-let authPromise: Promise<firebase.auth.Auth> | null = null;
-
-/**
- * Checks if session storage is available and writable.
- * @returns {boolean} True if session storage is available.
- */
-function isSessionStorageAvailable(): boolean {
-  try {
-    const testKey = 'firebase-session-storage-test';
-    window.sessionStorage.setItem(testKey, testKey);
-    window.sessionStorage.removeItem(testKey);
-    return true;
-  } catch (e) {
-    return false;
-  }
-}
-
-/**
- * Gets the initialized Firebase Auth instance.
- * This function is the single entry point for accessing the auth service.
- * It proactively checks for storage availability to prevent Firebase errors
- * in sandboxed environments like iframes.
- */
-export function getAuth(): Promise<firebase.auth.Auth> {
-  if (!authPromise) {
-    authPromise = (async () => {
-      const auth = firebase.auth();
-      if (isSessionStorageAvailable()) {
-        // Preferred persistence for normal browser environments
-        await auth.setPersistence(firebase.auth.Auth.Persistence.SESSION);
-      } else {
-        // Fallback for sandboxed environments where storage is restricted
-        console.warn("Firebase: Session storage not available. Using in-memory persistence.");
-        await auth.setPersistence(firebase.auth.Auth.Persistence.NONE);
-      }
-      return auth;
-    })();
-  }
-  return authPromise;
-}
-
-
-// Optional: Analytics only where supported (e.g., avoids SSR issues)
-export const analyticsReady = firebase.analytics.isSupported().then((ok) => (ok ? firebase.analytics() : null));
+export const db = getFirestore(app);
+export const auth = getAuth(app);
