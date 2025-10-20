@@ -12,55 +12,55 @@ const SYSTEM_INSTRUCTION = `You are "SiteCoord AI", a helpful and knowledgeable 
  * Manages a conversational chat session with the Gemini API.
  */
 export class ChatService {
-    private ai: GoogleGenAI;
-    private chat: Chat | null = null;
+  private ai: GoogleGenAI;
+  private chat: Chat | null = null;
 
-    /**
-     * @param apiKey The Google Gemini API key.
-     */
-    constructor(apiKey: string) {
-        if (!apiKey) {
-            throw new Error("API_KEY for Gemini must be provided to ChatService.");
-        }
-        this.ai = new GoogleGenAI({ apiKey });
+  /**
+   * @param apiKey The Google Gemini API key.
+   */
+  constructor(apiKey: string) {
+    if (!apiKey) {
+      throw new Error("API_KEY for Gemini must be provided to ChatService.");
+    }
+    this.ai = new GoogleGenAI({ apiKey });
+  }
+
+  /**
+   * Initializes a new chat session with the predefined system instruction.
+   * This is called automatically on the first message.
+   */
+  private initializeChat() {
+    this.chat = this.ai.chats.create({
+      model: "gemini-2.5-flash",
+      config: {
+        systemInstruction: SYSTEM_INSTRUCTION,
+      },
+    });
+  }
+
+  /**
+   * Sends a message to the chat and returns the streaming response.
+   * @param message The user's message to send to the chat.
+   * @returns An iterable stream of GenerateContentResponse chunks.
+   */
+  public async sendMessage(message: string) {
+    if (!this.chat) {
+      this.initializeChat();
     }
 
-    /**
-     * Initializes a new chat session with the predefined system instruction.
-     * This is called automatically on the first message.
-     */
-    private initializeChat() {
-        this.chat = this.ai.chats.create({
-            model: 'gemini-2.5-flash',
-            config: {
-                systemInstruction: SYSTEM_INSTRUCTION,
-            },
-        });
+    if (this.chat) {
+      const response = await this.chat.sendMessageStream({ message });
+      return response;
+    } else {
+      // This should theoretically not be reached due to the initialization above.
+      throw new Error("Chat could not be initialized.");
     }
+  }
 
-    /**
-     * Sends a message to the chat and returns the streaming response.
-     * @param message The user's message to send to the chat.
-     * @returns An iterable stream of GenerateContentResponse chunks.
-     */
-    public async sendMessage(message: string) {
-        if (!this.chat) {
-            this.initializeChat();
-        }
-
-        if (this.chat) {
-            const response = await this.chat.sendMessageStream({ message });
-            return response;
-        } else {
-            // This should theoretically not be reached due to the initialization above.
-            throw new Error("Chat could not be initialized.");
-        }
-    }
-    
-    /**
-     * Resets the chat history.
-     */
-    public resetChat() {
-        this.chat = null;
-    }
+  /**
+   * Resets the chat history.
+   */
+  public resetChat() {
+    this.chat = null;
+  }
 }
