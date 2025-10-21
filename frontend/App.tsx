@@ -151,12 +151,10 @@ const App: React.FC = () => {
   const seedData = async (dbInstance: Firestore, currentUserId: string) => {
     const projectsRef = collection(dbInstance, "projects");
     const tradesRef = collection(dbInstance, "trades");
-    const usersRef = collection(dbInstance, "users");
 
     const projectsSnap = await getDocs(projectsRef);
-    const usersSnap = await getDocs(usersRef);
 
-    if (projectsSnap.empty || usersSnap.empty) {
+    if (projectsSnap.empty) {
       console.log("Seeding initial data...");
       const batch = writeBatch(dbInstance);
 
@@ -179,13 +177,6 @@ const App: React.FC = () => {
             const newTaskRef = doc(taskColRef);
             batch.set(newTaskRef, { ...task, projectId: project.id });
           });
-        });
-      }
-
-      if (usersSnap.empty) {
-        MOCK_USERS.forEach((user) => {
-          const userDocRef = doc(usersRef, user.id);
-          batch.set(userDocRef, user);
         });
       }
 
@@ -250,22 +241,9 @@ const App: React.FC = () => {
       (error) => console.error("Error fetching trades:", error)
     );
 
-    const usersQuery = collection(appState.db, "users");
-    const unsubscribeUsers = onSnapshot(
-      usersQuery,
-      (snapshot: QuerySnapshot) => {
-        const usersData = snapshot.docs.map(
-          (doc) => ({ id: doc.id, ...doc.data() } as AppUser)
-        );
-        setAppState((prev) => ({ ...prev, users: usersData }));
-      },
-      (error) => console.error("Error fetching users:", error)
-    );
-
     return () => {
       unsubscribeProjects();
       unsubscribeTrades();
-      unsubscribeUsers();
     };
   }, [isAuthenticated, appState.db, user]);
 
@@ -540,15 +518,6 @@ const App: React.FC = () => {
         email: data.email,
       };
       batch.set(newTradeRef, newTradeData);
-
-      // Create new User
-      const newUserRef = doc(collection(appState.db, "users"));
-      const newUserData: Omit<AppUser, "id"> = {
-        name: data.name,
-        tradeId: newTradeRef.id,
-        role: "Subcontractor",
-      };
-      batch.set(newUserRef, newUserData);
 
       await batch.commit();
       // Snapshot listener will update state

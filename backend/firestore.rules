@@ -39,12 +39,6 @@ service cloud.firestore {
       allow read: if isAuthenticated();
     }
 
-    // Rules for the "users" collection
-    match /users/{userId} {
-      allow read: if isAuthenticated();
-      allow write: if isProjectManager() || isOwner(userId);
-    }
-
     // Deny all other access by default
     match /{document=**} {
       allow read, write: if false;
