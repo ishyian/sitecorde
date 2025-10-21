@@ -1,9 +1,7 @@
 {
   "extends": "@codecompose/typescript-config/service",
   "compilerOptions": {
-    "module": "NodeNext",
     "esModuleInterop": true,
-    "moduleResolution": "nodenext",
     "noImplicitReturns": true,
     "noUnusedLocals": true,
     "sourceMap": true,

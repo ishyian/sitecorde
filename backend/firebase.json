@@ -18,7 +18,8 @@
       ],
       "predeploy": [
         "pnpm run lint",
-        "pnpm run build"
+        "pnpm run build",
+        "npx isolate"
       ]
     }
   ]

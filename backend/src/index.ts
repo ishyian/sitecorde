@@ -5,3 +5,5 @@ if (!getApps().length) {
     projectId: process.env.PROJECT_ID!,
   });
 }
+
+export { onUserCreated } from "./functions/onUserCreated";
