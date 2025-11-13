@@ -6,4 +6,10 @@ if (!getApps().length) {
   });
 }
 
+
+
 export { onUserCreated } from "./functions/onUserCreated";
+export { sendSmsVerification } from "./functions/verification";
+export { verifySmsCode } from "./functions/verification";
+
+
