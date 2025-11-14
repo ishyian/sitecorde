@@ -1,10 +1,8 @@
-// noinspection JSDeprecatedSymbols
 
 import * as functions from "firebase-functions";
 import { defineSecret } from "firebase-functions/params";
 import twilio from "twilio";
 
-// New: Use Firebase Functions v6 Secrets instead of deprecated functions.config()
 const TWILIO_ACCOUNT_SID = defineSecret("TWILIO_ACCOUNT_SID");
 const TWILIO_AUTH_TOKEN = defineSecret("TWILIO_AUTH_TOKEN");
 const TWILIO_VERIFY_SID = defineSecret("TWILIO_VERIFY_SID");
