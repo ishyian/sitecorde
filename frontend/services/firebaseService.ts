@@ -5,6 +5,7 @@ import {
   setPersistence,
 } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
+import { getFunctions } from "firebase/functions";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAwwIHdCaQC-j5UY_iWtifvMyDV18vS4-w",
@@ -22,5 +23,6 @@ const app = initializeApp(firebaseConfig);
 // Core services
 export const db = getFirestore(app);
 export const auth = getAuth(app);
+export const functionsClient = getFunctions(app, "us-central1");
 
 setPersistence(auth, browserSessionPersistence);
