@@ -236,16 +236,44 @@ const App: React.FC = () => {
         const unsubscribeProjects = onSnapshot(
             projectsQuery,
             (snapshot: QuerySnapshot) => {
+                // Ensure Firestore doc.id is the authoritative id, even if a legacy 'id' field exists in data
                 const projectsData = snapshot.docs.map(
-                    (doc) => ({id: doc.id, ...doc.data()} as Project)
+                    (doc) => ({ ...doc.data(), id: doc.id } as Project)
                 );
-                setAppState((prev) => ({
-                    ...prev,
-                    projects: projectsData,
-                    isLoading: snapshot.metadata.hasPendingWrites
-                        ? prev.isLoading
-                        : false,
-                }));
+                setAppState((prev) => {
+                    // Ensure a selected project is set when projects load, or recover if the selected one disappears
+                    let selectedProject = prev.selectedProject;
+                    if (!selectedProject && projectsData.length > 0) {
+                        selectedProject = projectsData[0];
+                    } else if (selectedProject) {
+                        const stillExists = projectsData.some(
+                            (p) => p.id === selectedProject!.id
+                        );
+                        if (!stillExists) {
+                            selectedProject = projectsData[0] || null;
+                        }
+                    }
+
+                    // Pre-initialize tasks map entries for each project so appState.tasks always
+                    // contains a key for every project. This avoids cases where tasks stays `{}`
+                    // until the subcollection snapshot arrives, which can confuse downstream logic.
+                    const nextTasksMap: { [projectId: string]: Task[] } = { ...prev.tasks };
+                    for (const p of projectsData) {
+                        if (!nextTasksMap[p.id]) {
+                            nextTasksMap[p.id] = [];
+                        }
+                    }
+
+                    return {
+                        ...prev,
+                        projects: projectsData,
+                        tasks: nextTasksMap,
+                        selectedProject,
+                        isLoading: snapshot.metadata.hasPendingWrites
+                            ? prev.isLoading
+                            : false,
+                    };
+                });
             },
             (error) => {
                 console.error("Error fetching projects:", error);
@@ -289,8 +317,9 @@ const App: React.FC = () => {
             return onSnapshot(
                 tasksQuery,
                 (snapshot: QuerySnapshot) => {
+                    // Ensure each Task.id matches the Firestore document id
                     const tasksData = snapshot.docs.map(
-                        (doc) => ({id: doc.id, ...doc.data()} as Task)
+                        (doc) => ({ ...doc.data(), id: doc.id } as Task)
                     );
                     setAppState((prev) => ({
                         ...prev,
@@ -310,8 +339,17 @@ const App: React.FC = () => {
         };
     }, [appState.projects, appState.db]);
 
-    const handleSelectProject = (project: Project) => {
-        setAppState((prev) => ({...prev, selectedProject: project}));
+    const handleSelectProject = async (project: Project) => {
+        setAppState((prev) => {
+            const hasKey = Object.prototype.hasOwnProperty.call(prev.tasks, project.id);
+            const nextTasks = hasKey ? prev.tasks : { ...prev.tasks, [project.id]: [] };
+            return { ...prev, selectedProject: project, tasks: nextTasks };
+        });
+
+        if (db) {
+            const snap = await getDocs(collection(db, `projects/${project.id}/tasks`));
+            console.log("[getDocs check] project:", project.id, "count:", snap.size);
+        }
     };
 
     const handleSelectUserView = (user: AppUser | null) => {
@@ -421,10 +459,9 @@ const App: React.FC = () => {
                     appState.db,
                     "projects",
                     projectId,
-                    "taksks",
+                    "tasks",
                     taskId
                 );
-                updateDoc;
                 await updateDoc(taskRef, taskUpdate as { [x: string]: any });
             }
         }
@@ -1067,8 +1104,31 @@ const App: React.FC = () => {
                     name={accountInfo.name}
                     email={accountInfo.email}
                     phone={accountInfo.phone}
-                    onVerify={() => {
-                        handleVerifyPhoneNumber();
+                    onSavePhone={async (phone: string) => {
+                        const trimmed = (phone || "").trim();
+                        if (!trimmed) {
+                            showToast("error", "Please enter a phone number.");
+                            return;
+                        }
+                        if (appState.isOffline) {
+                            setAccountInfo((prev) => ({ ...prev, phone: trimmed }));
+                            showToast("success", "Phone saved locally (offline mode).");
+                            setIsAccountOpen(false);
+                            return;
+                        }
+                        if (user && db) {
+                            try {
+                                await setDoc(doc(db as Firestore, "users", user.uid), { phone: trimmed }, { merge: true });
+                                setAccountInfo((prev) => ({ ...prev, phone: trimmed }));
+                                showToast("success", "Phone saved.");
+                                setIsAccountOpen(false);
+                            } catch (e: any) {
+                                const msg = e?.message || "Failed to save phone";
+                                showToast("error", String(msg));
+                            }
+                        } else {
+                            showToast("error", "You must be signed in to save phone.");
+                        }
                     }}
                 />
             )}

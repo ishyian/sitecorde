@@ -187,8 +187,15 @@ const ProjectDashboard: React.FC<ProjectDashboardProps> = ({
             <div className="space-y-3">
               {sortedTasks.length > 0 ? (
                 sortedTasks.map((task) => {
-                  const trade = trades.find((t) => t.id === task.tradeId);
-                  if (!trade) return null;
+                  // Fallback trade for tasks that don't have a matching trade (e.g., created via SMS)
+                  const trade =
+                    trades.find((t) => t.id === task.tradeId) || {
+                      id: task.tradeId || "unassigned",
+                      name: "Unassigned",
+                      contact: "",
+                      phone: "",
+                      email: "",
+                    };
                   return (
                     <TaskCard
                       key={task.id}
