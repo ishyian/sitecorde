@@ -5,7 +5,7 @@ import {
     Check,
     PlusCircle,
     UserPlus,
-    LogOut, Phone,
+    LogOut,
 } from "lucide-react";
 import type {Project, AppUser} from "../types";
 
@@ -20,6 +20,7 @@ interface SidebarProps {
     onAddNewSubcontractor: () => void;
     onLogout: () => void;
     onVerifyPhoneNumber: () => void;
+    onOpenAccount: () => void;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({
@@ -33,7 +34,8 @@ const Sidebar: React.FC<SidebarProps> = ({
                                              onAddNewSubcontractor,
                                              onLogout,
                                              onVerifyPhoneNumber,
-                                         }) => {
+                                             onOpenAccount,
+                                             }) => {
     const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
 
@@ -95,6 +97,14 @@ const Sidebar: React.FC<SidebarProps> = ({
                             Add Subcontractor
                         </button>
                     )}
+                    <button
+                        onClick={onOpenAccount}
+                        className="w-full flex items-center justify-center gap-2 p-2 mt-2 bg-white text-slate-700 font-semibold rounded-lg border border-slate-300 hover:bg-slate-50 transition-colors"
+                        type="button"
+                    >
+                        <Building size={16} />
+                        Account
+                    </button>
                 </div>
 
                 <div className="mb-4">
@@ -170,20 +180,12 @@ const Sidebar: React.FC<SidebarProps> = ({
                                     <LogOut size={16}/>
                                     Log Out
                                 </button>
-                                <button
-                                    onClick={() => {
-                                        onVerifyPhoneNumber();
-                                        setIsUserMenuOpen(false);
-                                    }}
-                                    className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
-                                >
-                                    <Phone size={16}/>
-                                    Verify phone number
-                                </button>
+                                {/* Verify phone number button removed as per requirements */}
                             </div>
                         )}
                     </div>
                 </div>
+
 
                 <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-3">
                     Projects

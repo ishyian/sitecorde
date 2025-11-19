@@ -19,11 +19,14 @@ import {
     MOCK_USERS,
 } from "./constants";
 import {auth, db, functionsClient} from "./services/firebaseService";
-import {logOut, signIn} from "./services/authService";
+import {logOut} from "./services/authService";
 import Sidebar from "./components/Sidebar";
+import AccountInfoModal from "./components/AccountInfoModal";
 import ProjectDashboard from "./components/ProjectDashboard";
 import LoadingScreen from "./components/LoadingScreen";
 import LoginScreen from "./components/LoginScreen";
+import EmailLoginScreen from "./components/EmailLoginScreen";
+import EmailSignUpScreen from "./components/EmailSignUpScreen";
 import CustomerView from "./components/CustomerView";
 import SubcontractorView from "./components/SubcontractorView";
 import CreateProjectModal from "./components/CreateProjectModal";
@@ -39,6 +42,7 @@ import {
     QuerySnapshot,
     updateDoc,
     writeBatch,
+    setDoc,
 } from "firebase/firestore";
 import { httpsCallable, HttpsCallableResult } from "firebase/functions";
 
@@ -62,6 +66,7 @@ const App: React.FC = () => {
     const [isAddingSubcontractor, setIsAddingSubcontractor] = useState(false);
     const [chatService, setChatService] = useState<ChatService | null>(null);
     const [isDemo, setIsDemo] = useState(false);
+    const [authView, setAuthView] = useState<"landing" | "login" | "signup">("landing");
 
     // Phone verification dialog state
     const [isVerifyDialogOpen, setIsVerifyDialogOpen] = useState(false);
@@ -70,6 +75,14 @@ const App: React.FC = () => {
     const [codeInput, setCodeInput] = useState("");
     const [verifyLoading, setVerifyLoading] = useState(false);
     const [toast, setToast] = useState<null | { type: "success" | "error"; message: string }>(null);
+
+    // Account modal state
+    const [isAccountOpen, setIsAccountOpen] = useState(false);
+    const [accountInfo, setAccountInfo] = useState<{ name: string; email: string; phone: string | null }>({
+        name: "",
+        email: "",
+        phone: null,
+    });
 
     useEffect(() => {
         // This effect should only run once on mount.
@@ -82,6 +95,10 @@ const App: React.FC = () => {
                 // It is the central place to manage user authentication state.
                 unsubscribe = auth.onAuthStateChanged((firebaseUser) => {
                     setUser(firebaseUser);
+                    // If user signed out, return to landing (LoginScreen)
+                    if (!firebaseUser) {
+                        setAuthView("landing");
+                    }
                     setIsAuthLoading(false); // Auth state is now determined, stop loading.
                 });
             } catch (error: any) {
@@ -219,16 +236,44 @@ const App: React.FC = () => {
         const unsubscribeProjects = onSnapshot(
             projectsQuery,
             (snapshot: QuerySnapshot) => {
+                // Ensure Firestore doc.id is the authoritative id, even if a legacy 'id' field exists in data
                 const projectsData = snapshot.docs.map(
-                    (doc) => ({id: doc.id, ...doc.data()} as Project)
+                    (doc) => ({ ...doc.data(), id: doc.id } as Project)
                 );
-                setAppState((prev) => ({
-                    ...prev,
-                    projects: projectsData,
-                    isLoading: snapshot.metadata.hasPendingWrites
-                        ? prev.isLoading
-                        : false,
-                }));
+                setAppState((prev) => {
+                    // Ensure a selected project is set when projects load, or recover if the selected one disappears
+                    let selectedProject = prev.selectedProject;
+                    if (!selectedProject && projectsData.length > 0) {
+                        selectedProject = projectsData[0];
+                    } else if (selectedProject) {
+                        const stillExists = projectsData.some(
+                            (p) => p.id === selectedProject!.id
+                        );
+                        if (!stillExists) {
+                            selectedProject = projectsData[0] || null;
+                        }
+                    }
+
+                    // Pre-initialize tasks map entries for each project so appState.tasks always
+                    // contains a key for every project. This avoids cases where tasks stays `{}`
+                    // until the subcollection snapshot arrives, which can confuse downstream logic.
+                    const nextTasksMap: { [projectId: string]: Task[] } = { ...prev.tasks };
+                    for (const p of projectsData) {
+                        if (!nextTasksMap[p.id]) {
+                            nextTasksMap[p.id] = [];
+                        }
+                    }
+
+                    return {
+                        ...prev,
+                        projects: projectsData,
+                        tasks: nextTasksMap,
+                        selectedProject,
+                        isLoading: snapshot.metadata.hasPendingWrites
+                            ? prev.isLoading
+                            : false,
+                    };
+                });
             },
             (error) => {
                 console.error("Error fetching projects:", error);
@@ -272,8 +317,9 @@ const App: React.FC = () => {
             return onSnapshot(
                 tasksQuery,
                 (snapshot: QuerySnapshot) => {
+                    // Ensure each Task.id matches the Firestore document id
                     const tasksData = snapshot.docs.map(
-                        (doc) => ({id: doc.id, ...doc.data()} as Task)
+                        (doc) => ({ ...doc.data(), id: doc.id } as Task)
                     );
                     setAppState((prev) => ({
                         ...prev,
@@ -293,8 +339,17 @@ const App: React.FC = () => {
         };
     }, [appState.projects, appState.db]);
 
-    const handleSelectProject = (project: Project) => {
-        setAppState((prev) => ({...prev, selectedProject: project}));
+    const handleSelectProject = async (project: Project) => {
+        setAppState((prev) => {
+            const hasKey = Object.prototype.hasOwnProperty.call(prev.tasks, project.id);
+            const nextTasks = hasKey ? prev.tasks : { ...prev.tasks, [project.id]: [] };
+            return { ...prev, selectedProject: project, tasks: nextTasks };
+        });
+
+        if (db) {
+            const snap = await getDocs(collection(db, `projects/${project.id}/tasks`));
+            console.log("[getDocs check] project:", project.id, "count:", snap.size);
+        }
     };
 
     const handleSelectUserView = (user: AppUser | null) => {
@@ -404,10 +459,9 @@ const App: React.FC = () => {
                     appState.db,
                     "projects",
                     projectId,
-                    "taksks",
+                    "tasks",
                     taskId
                 );
-                updateDoc;
                 await updateDoc(taskRef, taskUpdate as { [x: string]: any });
             }
         }
@@ -664,7 +718,24 @@ const App: React.FC = () => {
     }
 
     if (!isAuthenticated && !isDemo) {
-        return <LoginScreen onEnterDemo={() => setIsDemo(true)} onLogin={signIn}/>;
+        if (authView === "login") {
+            return (
+                <EmailLoginScreen
+                    onBack={() => setAuthView("landing")}
+                    onGoToSignup={() => setAuthView("signup")}
+                />
+            );
+        }
+        if (authView === "signup") {
+            return <EmailSignUpScreen onBack={() => setAuthView("login")} />;
+        }
+        // landing view
+        return (
+            <LoginScreen
+                onEnterDemo={() => setIsDemo(true)}
+                onLogin={() => setAuthView("login")}
+            />
+        );
     }
 
     if (appState.error) {
@@ -803,6 +874,16 @@ const App: React.FC = () => {
             const res = (await callable({ phone, code })) as HttpsCallableResult<{ valid: boolean; status: string }>;
             if (res?.data?.valid) {
                 showToast("success", "Phone successfully verified.");
+                // Save verified phone into /users/{uid} (upsert)
+                if (user && db) {
+                    try {
+                        await setDoc(doc(db as Firestore, "users", user.uid), { phone }, { merge: true });
+                        // reflect in local account modal if open
+                        setAccountInfo((prev) => ({ ...prev, phone }));
+                    } catch (e) {
+                        console.warn("Failed to save phone to Firestore", e);
+                    }
+                }
                 closeVerifyDialog();
             } else {
                 const status = res?.data?.status || "unknown";
@@ -814,6 +895,32 @@ const App: React.FC = () => {
         } finally {
             setVerifyLoading(false);
         }
+    };
+
+    const openAccount = async () => {
+        const authUser = user;
+        const base = {
+            name: authUser?.displayName || "",
+            email: authUser?.email || "",
+            phone: null as string | null,
+        };
+        if (!appState.isOffline && authUser) {
+            try {
+                const ref = doc(db as Firestore, "users", authUser.uid);
+                const snap = await (await import("firebase/firestore")).getDoc(ref);
+                const data = snap.exists() ? snap.data() as any : null;
+                setAccountInfo({
+                    name: (data?.fullName as string) || base.name,
+                    email: (data?.email as string) || base.email,
+                    phone: (data?.phone as string | null) ?? base.phone,
+                });
+            } catch (e) {
+                setAccountInfo(base);
+            }
+        } else {
+            setAccountInfo(base);
+        }
+        setIsAccountOpen(true);
     };
 
 
@@ -830,6 +937,7 @@ const App: React.FC = () => {
                 onAddNewSubcontractor={() => setIsAddingSubcontractor(true)}
                 onLogout={handleLogout}
                 onVerifyPhoneNumber={handleVerifyPhoneNumber}
+                onOpenAccount={openAccount}
             />
             <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
                 {/* Toast */}
@@ -845,7 +953,7 @@ const App: React.FC = () => {
 
                 {/* Phone Verification Dialog */}
                 {isVerifyDialogOpen && (
-                    <div className="fixed inset-0 z-40 flex items-center justify-center">
+                    <div className="fixed inset-0 z-[60] flex items-center justify-center">
                         <div className="absolute inset-0 bg-black/40" onClick={closeVerifyDialog} />
                         <div className="relative z-50 w-full max-w-md bg-white rounded-lg shadow-xl p-6">
                             <h3 className="text-lg font-semibold mb-4">Verify your phone</h3>
@@ -987,6 +1095,41 @@ const App: React.FC = () => {
                 <AddSubcontractorModal
                     onClose={() => setIsAddingSubcontractor(false)}
                     onCreate={handleAddSubcontractor}
+                />
+            )}
+            {isAccountOpen && (
+                <AccountInfoModal
+                    open={isAccountOpen}
+                    onClose={() => setIsAccountOpen(false)}
+                    name={accountInfo.name}
+                    email={accountInfo.email}
+                    phone={accountInfo.phone}
+                    onSavePhone={async (phone: string) => {
+                        const trimmed = (phone || "").trim();
+                        if (!trimmed) {
+                            showToast("error", "Please enter a phone number.");
+                            return;
+                        }
+                        if (appState.isOffline) {
+                            setAccountInfo((prev) => ({ ...prev, phone: trimmed }));
+                            showToast("success", "Phone saved locally (offline mode).");
+                            setIsAccountOpen(false);
+                            return;
+                        }
+                        if (user && db) {
+                            try {
+                                await setDoc(doc(db as Firestore, "users", user.uid), { phone: trimmed }, { merge: true });
+                                setAccountInfo((prev) => ({ ...prev, phone: trimmed }));
+                                showToast("success", "Phone saved.");
+                                setIsAccountOpen(false);
+                            } catch (e: any) {
+                                const msg = e?.message || "Failed to save phone";
+                                showToast("error", String(msg));
+                            }
+                        } else {
+                            showToast("error", "You must be signed in to save phone.");
+                        }
+                    }}
                 />
             )}
             <ChatWidget chatService={chatService} isOffline={appState.isOffline}/>
