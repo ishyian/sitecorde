@@ -481,10 +481,18 @@ const App: React.FC = () => {
 
         const fullProjectData: Omit<Project, "id"> = {...projectData, pmId};
 
+        // selectedSubcontractorIds come from the CreateProjectModal. We now
+        // populate the selectable list from trades (ids == trade ids). For
+        // backward compatibility, also support when ids point to users with
+        // a tradeId.
         const tradeIdsForNewTasks = selectedSubcontractorIds
-            .map((subId) => {
-                const sub = appState.users.find((u) => u.id === subId);
-                return sub?.tradeId;
+            .map((selectedId) => {
+                // If it's a user id, resolve to their tradeId
+                const user = appState.users.find((u) => u.id === selectedId);
+                if (user?.tradeId) return user.tradeId;
+                // Otherwise, if it's already a trade id, pass it through when it exists
+                const trade = appState.trades.find((t) => t.id === selectedId);
+                return trade?.id;
             })
             .filter((id): id is string => !!id);
 
@@ -798,9 +806,16 @@ const App: React.FC = () => {
         ? appState.projects.filter((p) => p.pmId === viewingAsUser.id)
         : appState.projects;
 
-    const subcontractors = appState.users.filter(
-        (u) => u.role === "Subcontractor"
-    );
+    // Build selectable "subcontractors" from trades collection so user can add
+    // initial subcontractors when creating a project. We map each trade to a
+    // pseudo AppUser with role "Subcontractor" for compatibility with
+    // CreateProjectModal props and rendering.
+    const subcontractors = appState.trades.map((t) => ({
+        id: t.id, // use trade id as selectable id
+        name: t.contact || t.name, // show contact if available, otherwise trade name
+        role: "Subcontractor" as const,
+        tradeId: t.id,
+    }));
     const handleLogout = () => {
         if (isDemo) {
             window.location.reload();
