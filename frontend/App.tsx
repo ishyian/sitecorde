@@ -227,10 +227,6 @@ const App: React.FC = () => {
             return;
         }
 
-        if (user) {
-            seedData(appState.db, user.uid);
-        }
-
         const projectsQuery = collection(appState.db, "projects");
 
         const unsubscribeProjects = onSnapshot(
