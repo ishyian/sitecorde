@@ -15,6 +15,8 @@ export interface Project {
   address: string;
   client: string;
   pmId: string;
+  // The Firebase auth user id of the creator of this project
+  createdBy?: string;
 }
 
 export interface Trade {
@@ -23,6 +25,8 @@ export interface Trade {
   contact: string;
   phone: string;
   email: string;
+  // The Firebase auth user id of the creator of this trade
+  createdBy?: string;
 }
 
 export interface Task {

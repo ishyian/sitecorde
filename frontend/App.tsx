@@ -35,6 +35,8 @@ import {ChatService} from "./services/chatService";
 import ChatWidget from "./components/ChatWidget";
 import {
     collection,
+    query,
+    where,
     doc,
     Firestore,
     getDocs,
@@ -194,7 +196,7 @@ const App: React.FC = () => {
 
                 MOCK_PROJECTS.forEach((project) => {
                     const projectDocRef = doc(projectsRef, project.id);
-                    batch.set(projectDocRef, {...project});
+                    batch.set(projectDocRef, {...project, createdBy: currentUserId});
                     const tasksForProject =
                         MOCK_TASKS[project.id as keyof typeof MOCK_TASKS] || [];
                     tasksForProject.forEach((task) => {
@@ -227,10 +229,14 @@ const App: React.FC = () => {
             return;
         }
 
-        const projectsQuery = collection(appState.db, "projects");
+        // Only fetch projects created by the logged-in user
+        const projectsQueryRef = query(
+            collection(appState.db, "projects"),
+            where("createdBy", "==", user!.uid)
+        );
 
         const unsubscribeProjects = onSnapshot(
-            projectsQuery,
+            projectsQueryRef,
             (snapshot: QuerySnapshot) => {
                 // Ensure Firestore doc.id is the authoritative id, even if a legacy 'id' field exists in data
                 const projectsData = snapshot.docs.map(
@@ -281,9 +287,13 @@ const App: React.FC = () => {
             }
         );
 
-        const tradesQuery = collection(appState.db, "trades");
+        // Only fetch trades created by the logged-in user
+        const tradesQueryRef = query(
+            collection(appState.db, "trades"),
+            where("createdBy", "==", user!.uid)
+        );
         const unsubscribeTrades = onSnapshot(
-            tradesQuery,
+            tradesQueryRef,
             (snapshot: QuerySnapshot) => {
                 const tradesData = snapshot.docs.map(
                     (doc) => ({id: doc.id, ...doc.data()} as Trade)
@@ -475,7 +485,10 @@ const App: React.FC = () => {
                 : appState.users.find((u) => u.role === "Project Manager")?.id) ||
             "unassigned";
 
-        const fullProjectData: Omit<Project, "id"> = {...projectData, pmId};
+        // Save the creator user id (Firebase auth uid where available)
+        const createdBy = user?.uid || appState.viewingAsUser?.id || "unknown";
+
+        const fullProjectData: Omit<Project, "id"> = {...projectData, pmId, createdBy};
 
         // selectedSubcontractorIds come from the CreateProjectModal. We now
         // populate the selectable list from trades (ids == trade ids). For
@@ -555,6 +568,7 @@ const App: React.FC = () => {
         phone: string;
         email: string;
     }) => {
+        const createdBy = user?.uid || appState.viewingAsUser?.id || "unknown";
         if (appState.isOffline || !appState.db) {
             const newTradeId = `offline-trade-${Date.now()}`;
             const newTrade: Trade = {
@@ -563,6 +577,7 @@ const App: React.FC = () => {
                 contact: data.name,
                 phone: data.phone,
                 email: data.email,
+                createdBy,
             };
             const newSub: AppUser = {
                 id: `offline-sub-${Date.now()}`,
@@ -586,6 +601,7 @@ const App: React.FC = () => {
                 contact: data.name,
                 phone: data.phone,
                 email: data.email,
+                createdBy,
             };
             batch.set(newTradeRef, newTradeData);
 
