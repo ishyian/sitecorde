@@ -143,6 +143,13 @@ const AddSubcontractorModal: React.FC<AddSubcontractorModalProps> = ({
               </div>
             </fieldset>
           </div>
+          {/* Info label above action buttons */}
+          <div className="px-6 pb-2">
+            <p className="text-sm text-slate-700">
+              Subcontractors should text to this number :
+              <span className="block font-bold text-blue-700 mt-1">+1 844 748 9277</span>
+            </p>
+          </div>
           <div className="bg-slate-50 p-4 border-t border-slate-200 flex justify-end gap-3 flex-shrink-0">
             <button
               type="button"
