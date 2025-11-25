@@ -185,7 +185,7 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
           {/* Info label above action buttons */}
           <div className="px-6 pb-2">
             <p className="text-sm text-slate-700">
-              Subcontractors should text to this number :
+              Subcontractors should text to this phone number:
               <span className="block font-bold text-blue-700 mt-1">+1 844 748 9277</span>
             </p>
           </div>
